@@ -14,10 +14,15 @@ import json
 import os
 import numpy as np
 import pandas as pd
+from flask import send_file
+from flask import Flask, render_template
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
-    return 'OK', 200
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        return str(e)
 
 project="qdmeds"
 location="us-central1"
