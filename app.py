@@ -1,48 +1,3 @@
-# import json
-# from flask import Flask, request, jsonify
-
-# app = Flask(__name__)
-
-
-# @app.route('/', methods=['GET', 'POST'])
-# def home():
-#     return 'OK', 200
-
-
-# @app.route('/dialogflow', methods=['GET', 'POST'])
-# def dialogflow():
-
-#     data = request.get_json()
-#     print("data", data)
-#     print(json.dumps(data))
-#     x= data # x = json.loads(data)
-#     print("x==",x)
-#     c=x["text"]
-#     print("c", c)
-#     return jsonify(
-#         {
-#             'fulfillment_response': {
-#                 'messages': [
-#                     {
-#                         'text': {
-#                             'text': ['Hussam:-This is a sample response from webhook.']
-#                         }
-#                     }
-#                 ]
-#             }
-#         }
-#     )
-
-
-# if __name__ == '__main__':
-#     app.run(debug=True)
-
-
-
-
-
-
-
 import json
 from flask import Flask, request, jsonify
 
@@ -154,25 +109,5 @@ def dialogflow():
         }
     )
 
-# @app.route('/dialogflow', methods=['GET', 'POST'])
-# def dialogflow():
-
-#     data = request.get_json()
-#     #print(data)
-#     print("data=>",json.dumps(data))
-
-#     return jsonify(
-#         {
-#             'fulfillment_response': {
-#                 'messages': [
-#                     {
-#                         'text': {
-#                             'text': ['Hussam: This is a sample response from webhook.']
-#                         }
-#                     }
-#                 ]
-#             }
-#         }
-#     )
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
