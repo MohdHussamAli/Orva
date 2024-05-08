@@ -1,0 +1,15 @@
+Based on the context provided, answer the question appropriately. context: {context}, query:{query}
+    Follow these guidelines:
+    + Answer the Human's query and make sure you mention all relevant details from
+    the context, using exactly the same words as the context if possible.
+    + The answer must be based only on the context and not introduce any words or additional
+    information.
+    + All numbers, like price, date, time or phone numbers must appear exactly as
+    they are in the context.
+    + Give as comprehensive answer as possible from the context. Include all
+    important details, and any caveats and conditions that apply.
+    + The answer MUST be in English.
+    + Don't try to make up an answer: If the answer cannot be found in the context,
+    you admit that you don't know and you answer NOT_ENOUGH_INFORMATION.
+    You will be given a few examples before you begin.
+    Begin! Let's work this out step by step to be sure we have the right answer.

@@ -17,6 +17,7 @@ import pandas as pd
 from flask import send_file
 from flask import Flask, render_template
 
+from sklearn.metrics.pairwise import cosine_similarity
 @app.route('/', methods=['GET', 'POST'])
 def home():
     try:
@@ -30,6 +31,13 @@ index_name="orva_poc_index_deployed_05030849"
 df=pd.read_csv("./Orva_Embed_File.csv")
 df
 
+df_input=pd.read_csv("./ORVA_QA_LATEST.csv",names=['id','question','title'])
+df_input = df_input.reset_index()
+print(df_input)
+print(df_input.query(f"id == 112", engine="python"))
+#df_input.reset_index
+print("df_input: ", df_input.count())
+
 aiplatform.init(project=project,location=location)
 vertexai.init()
 model = GenerativeModel("gemini-1.5-pro-preview-0409")
@@ -42,12 +50,18 @@ def generate_text_embeddings(sentences) -> list:
     vectors = [embedding.values for embedding in embeddings]
     return vectors
 
-def generate_context(data):
+def generate_context(data,text_column='title'):
     concatenated_sentences = ''
+    print(data)
     for _, row in data.iterrows():
         concatenated_sentences += row['title'] + "\n" 
     return concatenated_sentences.strip()
 
+def get_vector(data):
+    concatenated_sentences = []
+    for _, row in data.iterrows():
+        concatenated_sentences.append(row['embedding'])
+    return concatenated_sentences[0]
 
 @app.route('/dialogflow', methods=['GET', 'POST'])
 def dialogflow():
@@ -55,10 +69,10 @@ def dialogflow():
     data = request.get_json()
     #print(data)
     print("data=>",json.dumps(data))
-    #query = query_request.get_json()
-    #print("Query:", query)
-    #query = query_request.query
     query = data["text"]
+    return find_match_response(query)[1]
+
+def find_match_response(query):
     print("Query:", query)
     context = ""
     #query=["second knee replacement"]
@@ -69,27 +83,29 @@ def dialogflow():
     response = orva_poc_index_ep.find_neighbors(
         deployed_index_id = index_name,
         queries = [qry_emb[0]],
-        num_neighbors = 10
+        num_neighbors = 5,approx_num_neighbors=10,
+        return_full_datapoint=True
     )
-
+    matching_ids = []
     for idx, neighbor in enumerate(response[0]):
+        matching_ids.append(neighbor.id)
         id = np.int64(neighbor.id)
         similar = df.query("id == @id", engine="python")
         context += generate_context(similar) + "\n"
 
-    #print("Context:", context)
-    prompt=f"""Based on the context provided, answer the question appropriately. context: {context}, query:{query}
+    print("==> matching ids: ", matching_ids)
+
+    # print("Context:", context)
+    prompt=f"""You are an assistant to answer question. Based on the context provided, answer the question verbatim from the context. context: {context}, query:{query}
     Follow these guidelines:
-    + Answer the Human's query and make sure you mention all relevant details from
-    the context, using exactly the same words as the cotext if possible.
-    + The answer must be based only on the context and not introduce any additional
+    + Answer the Human's query and make sure you mention exact details from
+    the context, using exactly the same words as the context if possible.
+    + The answer must be based only on the context and not introduce any words or additional
     information.
     + All numbers, like price, date, time or phone numbers must appear exactly as
     they are in the context.
-    + Give as comprehensive answer as possible given the context. Include all
-    important details, and any caveats and conditions that apply.
     + The answer MUST be in English.
-    + Don't try to make up an answer: If the answer cannot be found in the context,
+    + Do not make up any words or the answer: If the answer cannot be found in the context,
     you admit that you don't know and you answer NOT_ENOUGH_INFORMATION.
     You will be given a few examples before you begin.
     Begin! Let's work this out step by step to be sure we have the right answer."""
@@ -97,22 +113,82 @@ def dialogflow():
 
     chat = model.start_chat(history=[])
     result = chat.send_message(prompt)
-    print("Vertex Response:",result.text)
+    
+    vertext_text = result.text
+    
     vertex_response=result.text
+    # reverse lookup based on the response:
+    res_emb=generate_text_embeddings([vertex_response])
+    
+    input_ranks =[]
+    best_input_id = 0
+    best_input_rank =0
+    for matching_id in matching_ids:
+        input_emb = get_vector(df.query(f"id == {matching_id}", engine="python"))
+        input_vec = ast.literal_eval(input_emb) # np.array(np.matrix(input_emb)).ravel()
+        similarity_rank = cosine_similarity([res_emb[0]], [input_vec])[0][0]
+        if(similarity_rank>best_input_rank):
+            best_input_rank = similarity_rank
+            best_input_id = matching_id
+        input_ranks.append(similarity_rank)
+        
+    
+    # response = orva_poc_index_ep.find_neighbors(
+    #     deployed_index_id = index_name,
+    #     queries = [res_emb[0]],
+    #     num_neighbors = 5,approx_num_neighbors=10,
+    #     return_full_datapoint=True
+    #     # numeric_filter=[NumericNamespace(name="id", value_int=26, op="EQUAL")]
+    #     #['26','25','27','30','286']
+    # )
+    response_text = ''
+    answer_id =''
+    if(vertex_response !="NOT_ENOUGH_INFORMATION"):
+        answer_id = best_input_id
+        print(f"id == {answer_id}")
+        print(df_input)
+        response_text = generate_context(df.query(f"id == {answer_id}", engine="python"),text_column='title')
+    else:
+        answer_id =0
+        
     #return result.text
-    return jsonify(
+    print("Answer :",answer_id)
+    
+    json_response= jsonify(
         {
             'fulfillment_response': {
                 'messages': [
                     {
                         'text': {
-                            'text': [vertex_response]
+                            'text': [f"{answer_id}:{response_text}"]
                         }
                     }
                 ]
             }
         }
     )
+    return [answer_id,json_response]
 
+
+
+def test_queries():
+    df=pd.read_csv("./test.csv")
+    df = df.reset_index()  # make sure indexes pair with number of rows
+    response_row =[]
+    for index, row in df.iterrows():
+        response = find_match_response(row['query'])
+        response_row.append([index,row['query'],row['expected_id'],response[0],(str(row['expected_id'])==response[0])])
+    print(response_row)
+    
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    with app.app_context():
+        # test_queries()
+        # find_match_response("how should i go upstairs") #104 -f
+        #find_match_response("my knee doesnt feel natural at all") #248 #252 - p
+        #find_match_response("my knee itches") #356 -f
+        # find_match_response("my physical therepy hurts too much to go to") #61 -p
+        # find_match_response("what do i need to know about gardening")
+        # find_match_response("what do i need to know about gardening")
+        # find_match_response("where do you land a rover") #none -p
+        # find_match_response("This shouldnt do any work at all") #none -
+        app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))    
