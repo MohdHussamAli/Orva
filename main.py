@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from flask import send_file
 from flask import Flask, render_template
-
+import ast
 from sklearn.metrics.pairwise import cosine_similarity
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -31,12 +31,13 @@ index_name="orva_poc_index_deployed_05030849"
 df=pd.read_csv("./Orva_Embed_File.csv")
 df
 
-df_input=pd.read_csv("./ORVA_QA_LATEST.csv",names=['id','question','title'])
-df_input = df_input.reset_index()
+# df_input=pd.read_csv("./ORVA_QA_LATEST.csv",names=['id','question','title'])
+df_input=pd.read_csv("./orva_data.csv")
+#df_input = df_input.reset_index()
 print(df_input)
-print(df_input.query(f"id == 112", engine="python"))
+#print(df_input.query(f"id == 112", engine="python"))
 #df_input.reset_index
-print("df_input: ", df_input.count())
+print("df_input: ", len(df_input))
 
 aiplatform.init(project=project,location=location)
 vertexai.init()
@@ -147,7 +148,7 @@ def find_match_response(query):
         answer_id = best_input_id
         print(f"id == {answer_id}")
         print(df_input)
-        response_text = generate_context(df.query(f"id == {answer_id}", engine="python"),text_column='title')
+        response_text = generate_context(df_input.query(f"id == {answer_id}", engine="python"),text_column='title')
     else:
         answer_id =0
         
