@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from flask import send_file
 from flask import Flask, render_template
-
+import ast
 from sklearn.metrics.pairwise import cosine_similarity
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -52,7 +52,6 @@ def generate_text_embeddings(sentences) -> list:
 
 def generate_context(data,text_column='title'):
     concatenated_sentences = ''
-    print(data)
     for _, row in data.iterrows():
         concatenated_sentences += row['title'] + "\n" 
     return concatenated_sentences.strip()
@@ -116,7 +115,8 @@ def find_match_response(query):
     
     vertext_text = result.text
     
-    vertex_response=result.text
+    vertex_response=result.text.strip()
+    print("Vertex Response: ", vertex_response)
     # reverse lookup based on the response:
     res_emb=generate_text_embeddings([vertex_response])
     
@@ -125,7 +125,7 @@ def find_match_response(query):
     best_input_rank =0
     for matching_id in matching_ids:
         input_emb = get_vector(df.query(f"id == {matching_id}", engine="python"))
-        input_vec = ast.literal_eval(input_emb) # np.array(np.matrix(input_emb)).ravel()
+        input_vec = ast.literal_eval(input_emb)
         similarity_rank = cosine_similarity([res_emb[0]], [input_vec])[0][0]
         if(similarity_rank>best_input_rank):
             best_input_rank = similarity_rank
@@ -133,23 +133,14 @@ def find_match_response(query):
         input_ranks.append(similarity_rank)
         
     
-    # response = orva_poc_index_ep.find_neighbors(
-    #     deployed_index_id = index_name,
-    #     queries = [res_emb[0]],
-    #     num_neighbors = 5,approx_num_neighbors=10,
-    #     return_full_datapoint=True
-    #     # numeric_filter=[NumericNamespace(name="id", value_int=26, op="EQUAL")]
-    #     #['26','25','27','30','286']
-    # )
     response_text = ''
     answer_id =''
-    if(vertex_response !="NOT_ENOUGH_INFORMATION"):
-        answer_id = best_input_id
-        print(f"id == {answer_id}")
-        print(df_input)
-        response_text = generate_context(df.query(f"id == {answer_id}", engine="python"),text_column='title')
-    else:
+    if(vertex_response == "NOT_ENOUGH_INFORMATION"):
         answer_id =0
+    else:
+        answer_id = best_input_id
+        response_text = generate_context(df.query(f"id == {answer_id}", engine="python"),text_column='title')
+        
         
     #return result.text
     print("Answer :",answer_id)
