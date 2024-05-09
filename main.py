@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from flask import send_file
 from flask import Flask, render_template
-import astimport ast
+import ast
 from sklearn.metrics.pairwise import cosine_similarity
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -31,7 +31,6 @@ index_name="orva_poc_index_deployed_05030849"
 df=pd.read_csv("./Orva_Embed_File.csv")
 df
 
-# df_input=pd.read_csv("./ORVA_QA_LATEST.csv",names=['id','question','title'])
 df_input=pd.read_csv("./orva_data.csv")
 #df_input = df_input.reset_index()
 print(df_input)
@@ -96,7 +95,7 @@ def find_match_response(query):
     print("==> matching ids: ", matching_ids)
 
     # print("Context:", context)
-    prompt=f"""You are an assistant to answer question. Based on the context provided, answer the question verbatim from the context. context: {context}, query:{query}
+    prompt=f"""You are a triage nurse assistant to answer user queries post knee surgery. Based on the context provided, answer the question verbatim from the context. context: {context}, query:{query}
     Follow these guidelines:
     + Answer the Human's query and make sure you mention exact details from
     the context, using exactly the same words as the context if possible.
@@ -107,8 +106,8 @@ def find_match_response(query):
     + The answer MUST be in English.
     + Do not make up any words or the answer: If the answer cannot be found in the context,
     you admit that you don't know and you answer NOT_ENOUGH_INFORMATION.
-    You will be given a few examples before you begin.
-    Begin! Let's work this out step by step to be sure we have the right answer."""
+    + Add a single empathetic line. Ensure the empathetic statement reflects the user's situation or emotions related to their question. Don't follow up with a question. Just provide the empathetic line.
+    """
 
 
     chat = model.start_chat(history=[])
@@ -175,6 +174,7 @@ def test_queries():
 if __name__ == "__main__":
     with app.app_context():
         # test_queries()
+        find_match_response("Can i plant a garden") #104 -f
         # find_match_response("how should i go upstairs") #104 -f
         #find_match_response("my knee doesnt feel natural at all") #248 #252 - p
         #find_match_response("my knee itches") #356 -f
@@ -183,4 +183,4 @@ if __name__ == "__main__":
         # find_match_response("what do i need to know about gardening")
         # find_match_response("where do you land a rover") #none -p
         # find_match_response("This shouldnt do any work at all") #none -
-        app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))    
+        #app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))    
