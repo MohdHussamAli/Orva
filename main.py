@@ -1,10 +1,5 @@
 import json
 from flask import Flask, request, jsonify
-
-app = Flask(__name__)
-
-
-#import uvicorn
 import string
 from vertexai.language_models import TextEmbeddingModel
 from google.cloud import aiplatform
@@ -17,7 +12,10 @@ import pandas as pd
 from flask import send_file
 from flask import Flask, render_template
 import ast
+import re
 from sklearn.metrics.pairwise import cosine_similarity
+app = Flask(__name__)
+
 @app.route('/', methods=['GET', 'POST'])
 def home():
     try:
@@ -32,16 +30,12 @@ df=pd.read_csv("./Orva_Embed_File.csv")
 df
 
 df_input=pd.read_csv("./orva_data.csv")
-#df_input = df_input.reset_index()
 print(df_input)
-#print(df_input.query(f"id == 112", engine="python"))
-#df_input.reset_index
 print("df_input: ", len(df_input))
 
 aiplatform.init(project=project,location=location)
 vertexai.init()
 model = GenerativeModel("gemini-1.5-pro-preview-0409")
-# model = GenerativeModel("gemini-pro")
 orva_poc_index_ep = aiplatform.MatchingEngineIndexEndpoint(index_endpoint_name='3989120544548061184')
 
 def generate_text_embeddings(sentences) -> list:    
@@ -62,11 +56,18 @@ def get_vector(data):
         concatenated_sentences.append(row['embedding'])
     return concatenated_sentences[0]
 
+def extract_empathetic_line(text):
+    pattern = r'\**\s*[Ee]mpathetic line\s*[:*]*\s*(.*?)(?=\.)'
+    match = re.search(pattern, text)
+    if match:
+        empathetic_line = match.group(1).strip()
+        return empathetic_line
+    else:
+        return ""
+
 @app.route('/dialogflow', methods=['GET', 'POST'])
 def dialogflow():
-
     data = request.get_json()
-    #print(data)
     print("data=>",json.dumps(data))
     query = data["text"]
     return find_match_response(query)[1]
@@ -74,8 +75,6 @@ def dialogflow():
 def find_match_response(query):
     print("Query:", query)
     context = ""
-    #query=["second knee replacement"]
-    #query=["second knee replacement "]
     query=[query]
     print("list", query)
     qry_emb=generate_text_embeddings(query)
@@ -93,8 +92,6 @@ def find_match_response(query):
         context += generate_context(similar) + "\n"
 
     print("==> matching ids: ", matching_ids)
-
-    # print("Context:", context)
     prompt=f"""You are a triage nurse assistant to answer user queries post knee surgery. Based on the context provided, answer the question verbatim from the context. context: {context}, query:{query}
     Follow these guidelines:
     + Answer the Human's query and make sure you mention exact details from
@@ -106,20 +103,16 @@ def find_match_response(query):
     + The answer MUST be in English.
     + Do not make up any words or the answer: If the answer cannot be found in the context,
     you admit that you don't know and you answer NOT_ENOUGH_INFORMATION.
-    + Add a single empathetic line. Ensure the empathetic statement reflects the user's situation or emotions related to their question. Don't follow up with a question. Just provide the empathetic line.
+    + Add a single empathetic line. Ensure the empathetic statement reflects the user's situation or emotions related to their question. Don't follow up with a question. Just provide the empathetic line with sub heading empathetic line:.
     """
-
-
     chat = model.start_chat(history=[])
     result = chat.send_message(prompt)
-    
     vertext_text = result.text
-    
     vertex_response=result.text.strip()
+    empathetic_line=extract_empathetic_line(vertex_response)
     print("Vertex Response: ", vertex_response)
     # reverse lookup based on the response:
     res_emb=generate_text_embeddings([vertex_response])
-    
     input_ranks =[]
     best_input_id = 0
     best_input_rank =0
@@ -132,17 +125,14 @@ def find_match_response(query):
             best_input_id = matching_id
         input_ranks.append(similarity_rank)
         
-    
     response_text = ''
     answer_id =''
     if(vertex_response == "NOT_ENOUGH_INFORMATION"):
         answer_id =0
     else:
         answer_id = best_input_id
-        response_text = generate_context(df.query(f"id == {answer_id}", engine="python"),text_column='title')
-        
-        
-    #return result.text
+        response_text = generate_context(df_input.query(f"id == {answer_id}", engine="python"),text_column='title')
+    
     print("Answer :",answer_id)
     
     json_response= jsonify(
@@ -151,7 +141,7 @@ def find_match_response(query):
                 'messages': [
                     {
                         'text': {
-                            'text': [f"{answer_id}:{response_text}"]
+                            'text': [f"{empathetic_line}\n{answer_id}:{response_text}"]
                         }
                     }
                 ]
@@ -174,7 +164,7 @@ def test_queries():
 if __name__ == "__main__":
     with app.app_context():
         # test_queries()
-        find_match_response("Can i plant a garden") #104 -f
+        # find_match_response("Can i plant a garden") #104 -f
         # find_match_response("how should i go upstairs") #104 -f
         #find_match_response("my knee doesnt feel natural at all") #248 #252 - p
         #find_match_response("my knee itches") #356 -f
@@ -183,4 +173,4 @@ if __name__ == "__main__":
         # find_match_response("what do i need to know about gardening")
         # find_match_response("where do you land a rover") #none -p
         # find_match_response("This shouldnt do any work at all") #none -
-        #app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))    
+        app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
