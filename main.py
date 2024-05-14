@@ -25,18 +25,22 @@ def home():
 
 project="qdmeds"
 location="us-central1"
-index_name="orva_poc_index_deployed_05030849"
+index_name= "orva_poc_index_deployed_05030849"
 df=pd.read_csv("./Orva_Embed_File.csv")
-df
+print("df length: ", len(df))
 
 df_input=pd.read_csv("./orva_data.csv")
-print(df_input)
+# print(df_input)
 print("df_input: ", len(df_input))
 
 aiplatform.init(project=project,location=location)
 vertexai.init()
 model = GenerativeModel("gemini-1.5-pro-preview-0409")
 orva_poc_index_ep = aiplatform.MatchingEngineIndexEndpoint(index_endpoint_name='3989120544548061184')
+
+no_match_response ="""Unfortunately, I don't have enough information to answer your specific question accurately but we're always working to expand my capabilities. However, I can help you explore resources on managing pain, soreness, swelling, and incision site care after surgery. Just let me know which topic you'd like to learn more about!
+
+**Tip**: I'm best equipped to answer questions when they are asked as complete sentences."""
 
 def generate_text_embeddings(sentences) -> list:    
     model = TextEmbeddingModel.from_pretrained("textembedding-gecko@001")
@@ -76,7 +80,6 @@ def find_match_response(query):
     print("Query:", query)
     context = ""
     query=[query]
-    print("list", query)
     qry_emb=generate_text_embeddings(query)
     response = orva_poc_index_ep.find_neighbors(
         deployed_index_id = index_name,
@@ -103,13 +106,11 @@ def find_match_response(query):
     + The answer MUST be in English.
     + Do not make up any words or the answer: If the answer cannot be found in the context,
     you admit that you don't know and you answer NOT_ENOUGH_INFORMATION.
-    + Add a single empathetic line. Ensure the empathetic statement reflects the user's situation or emotions related to their question. Don't follow up with a question. Just provide the empathetic line with sub heading empathetic line:.
     """
     chat = model.start_chat(history=[])
     result = chat.send_message(prompt)
     vertext_text = result.text
     vertex_response=result.text.strip()
-    empathetic_line=extract_empathetic_line(vertex_response)
     print("Vertex Response: ", vertex_response)
     # reverse lookup based on the response:
     res_emb=generate_text_embeddings([vertex_response])
@@ -129,6 +130,7 @@ def find_match_response(query):
     answer_id =''
     if(vertex_response == "NOT_ENOUGH_INFORMATION"):
         answer_id =0
+        response_text = no_match_response
     else:
         answer_id = best_input_id
         response_text = generate_context(df_input.query(f"id == {answer_id}", engine="python"),text_column='title')
@@ -141,7 +143,7 @@ def find_match_response(query):
                 'messages': [
                     {
                         'text': {
-                            'text': [f"{empathetic_line}\n{answer_id}:{response_text}"]
+                            'text': [f"{response_text}"]
                         }
                     }
                 ]
